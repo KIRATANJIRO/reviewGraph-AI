@@ -10,6 +10,7 @@ const SECRET_PATTERNS = [
   /AURA_CLIENT_SECRET[=:\s]*[\w-]+/gi,
   /AURA_CLIENT_ID[=:\s]*[\w-]+/gi,
   /NEO4J_PASSWORD[=:\s]*[^\s"']+/gi,
+  /SS_TOKEN\s*[=:]\s*["']?[^\s"']+/gi,
   /access_token["']?\s*[:=]\s*["']?[\w.-]+/gi
 ];
 
@@ -17,6 +18,8 @@ const SECRET_PATTERNS = [
 export function sanitizeClientText(value) {
   if (value == null) return value;
   let text = String(value);
+  const ssToken = process.env.SS_TOKEN?.trim();
+  if (ssToken) text = text.replaceAll(ssToken, "[redacted]");
   for (const pattern of SECRET_PATTERNS) {
     text = text.replace(pattern, "[redacted]");
   }
@@ -35,7 +38,7 @@ export function sanitizeClientError(message) {
 
 /** Public Aura status — no invoke URL, client id, or tokens. */
 export function publicAuraAgentStatus({ configured, mode, ready, reason }) {
-  const enabled = !!(configured && mode && mode !== "off");
+  const enabled = !!(configured && mode === "primary");
   const publicReason =
     reason === "not_configured" || reason === "disabled"
       ? reason
@@ -53,12 +56,33 @@ export function publicAuraAgentStatus({ configured, mode, ready, reason }) {
   };
 }
 
+/** Public Qwen3 status - no endpoint or bearer token. */
+export function publicQwenAgentStatus({ configured, mode, ready, reason, model }) {
+  const enabled = mode === "primary";
+  const publicReason =
+    ["disabled", "not_configured", "not_checked", "authentication_failed"].includes(reason)
+      ? reason
+      : ready
+        ? undefined
+        : "unavailable";
+
+  return {
+    enabled,
+    configured: !!configured,
+    mode,
+    ready: !!ready,
+    model: enabled ? model : undefined,
+    ...(publicReason ? { reason: publicReason } : {})
+  };
+}
+
 /** Strip fields that must not leave the server. */
 export function sanitizeAskResponse(body) {
   if (!body || typeof body !== "object") return body;
   const { rawContent, invokeUrl, ...rest } = body;
   const out = { ...rest };
   if (out.auraError) out.auraError = sanitizeClientError(out.auraError);
+  if (out.qwenError) out.qwenError = sanitizeClientError(out.qwenError);
   if (out.detail) out.detail = sanitizeClientError(out.detail);
   if (out.reasoning) out.reasoning = out.reasoning.map((s) => sanitizeClientText(s));
   if (out.evidence) out.evidence = out.evidence.map((s) => sanitizeClientText(s));

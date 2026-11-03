@@ -1,14 +1,14 @@
 # Getting Started — ReviewGraph AI
 
-The complete, step-by-step guide: run the demo, explore the flagship pull request, ask the graph, connect Neo4j Aura, and generate the presentation decks.
+The complete, step-by-step guide: run the demo, explore the flagship pull request, ask the graph with Qwen3, connect Neo4j, and generate the presentation decks.
 
-ReviewGraph AI is an **Aura-powered engineering intelligence agent** for reviewing AI-written code. It reasons over three layers — a **Code Intelligence Graph**, an **Aura Agent**, and **Agent Memory** — and never gives a verdict without cited graph evidence.
+ReviewGraph AI is a **Neo4j + Qwen3 engineering intelligence agent** for reviewing AI-written code. It reasons over three layers — a **Code Intelligence Graph**, a hosted **Qwen3 coding LLM**, and **Agent Memory** — and never gives a verdict without cited graph evidence.
 
 **Generic by design:** point at **any GitHub or GitLab repository** and **any Neo4j database** using only `.env` — no application code changes.
 
 | Guide | When to read |
 | --- | --- |
-| [CONFIGURATION.md](CONFIGURATION.md) | Where to enter GitHub, GitLab, Neo4j, and Aura details |
+| [CONFIGURATION.md](CONFIGURATION.md) | Where to enter GitHub, GitLab, Neo4j, and Qwen3 details |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Technical architecture with detailed diagrams |
 | [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) | Graph vs frontier agents — LLM token cost model |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | Complete list of what is built |
@@ -19,7 +19,7 @@ ReviewGraph AI is an **Aura-powered engineering intelligence agent** for reviewi
 ## 0. Concept in one picture
 
 ```text
- source/diff ──▶ ingest (seed / CSV) ──▶ Neo4j code graph ──▶ Aura agent + REST API ──▶ React UI
+ source/diff ──▶ ingest (seed / CSV) ──▶ Neo4j code graph ──▶ Qwen3 + REST API ──▶ React UI
                                                   │
                           Text2Cypher · reviewer recommendation · risk propagation
                           architectural compliance · incident-aware review · agent memory
@@ -31,6 +31,7 @@ ReviewGraph AI is an **Aura-powered engineering intelligence agent** for reviewi
 
 - **Node.js 20+** and **npm**.
 - *(Optional)* A **Neo4j Aura** (free tier) or **Neo4j Desktop** instance. Not required for the demo — it runs on an in-memory graph.
+- *(Optional)* **SS_TOKEN** and network access to the hosted Qwen3 endpoint for model explanations in Ask the Graph.
 
 ---
 
@@ -106,6 +107,21 @@ NEO4J_URI=neo4j+s://xxxx.databases.neo4j.io   # Aura
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=your-password
 ```
+
+### Qwen3 hosted coding LLM
+
+For Neo4j graph evidence with hosted Qwen3 explanations, configure your private `.env`:
+
+```env
+SS_TOKEN=your-private-token
+QWEN_AGENT_MODE=primary
+QWEN_MODEL=Qwen3-Coder-30B-A3B-Instruct
+QWEN_API_URL=https://continue.ovh.di-ai.soprasteria.com/v1/chat/completions
+QWEN_TIMEOUT_MS=300000
+AURA_AGENT_MODE=off
+```
+
+Restart the server after editing `.env`. Ask the Graph retrieves evidence using the existing Cypher templates and Neo4j connection, then sends it with your question to Qwen3. Do not commit the token or place it in frontend variables. If Qwen3 fails or the token is missing, the deterministic graph answer is returned. Set `QWEN_AGENT_MODE=off` for local-only operation.
 
 ---
 

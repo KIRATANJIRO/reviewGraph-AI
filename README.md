@@ -1,6 +1,6 @@
 # ReviewGraph AI
 
-> **An Aura-powered engineering intelligence agent that combines code relationships, architectural knowledge, and persistent memory to deliver explainable code reviews and impact analysis for AI-written code.**
+> **A Neo4j + Qwen3 engineering intelligence agent that combines code relationships, architectural knowledge, and persistent memory to deliver explainable code reviews and impact analysis for AI-written code.**
 
 Most AI reviewers only see the **current diff**. ReviewGraph AI reasons over the *context* a senior engineer actually uses:
 
@@ -17,7 +17,7 @@ Because code review is fundamentally a **context problem**, not a diff problem �
 
 > **Start here:** [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) · [docs/CONFIGURATION.md](docs/CONFIGURATION.md) (where to enter credentials) · [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (diagrams) · [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) (what is built) · [docs/adr/](docs/adr/) (ADRs)
 
-**Yes — it is generic:** configure **any GitHub or GitLab repo** and **any Neo4j database** via `.env` only — ingest, Neo4j sync, and Aura Agent run automatically on startup. See [Generic repo setup](docs/GENERIC_REPO_SETUP.md) and [Configuration](docs/CONFIGURATION.md).
+**Yes — it is generic:** configure **any GitHub or GitLab repo**, **any Neo4j database**, and the hosted **Qwen3** coding model via `.env` only. See [Generic repo setup](docs/GENERIC_REPO_SETUP.md) and [Configuration](docs/CONFIGURATION.md).
 
 ## The three layers
 
@@ -30,12 +30,12 @@ Repository · PR · File · Module · Service · Dependency
 ReviewComment · IssueType · RiskPattern · Developer · Team
 ```
 
-### Layer 2 — Aura Agent (the reasoning layer)
+### Layer 2 — Agent Reasoning (Qwen3)
 
 Natural-language questions are answered over the graph:
 
 ```text
-User Question → Aura Agent → Text2Cypher → Neo4j Graph Query → Graph Results → LLM Explanation
+User Question → Text2Cypher → Neo4j Graph Query → Graph Results → Qwen3 LLM Explanation
 ```
 
 ### Layer 3 — Agent Memory
@@ -47,7 +47,7 @@ Past Reviews · Risk Decisions · Architecture Decisions · Incidents · Reviewe
 ```
 
 > **Today:** "AuthModule depends on UserModule."
-> **With Aura Agent + Memory:** "This dependency pattern appeared in PR-156 and PR-201. Both were later linked to production incidents involving token-validation failures. Security recommended avoiding this coupling in ADR-17."
+> **With graph-backed agent memory:** "This dependency pattern appeared in PR-156 and PR-201. Both were later linked to production incidents involving token-validation failures. Security recommended avoiding this coupling in ADR-17."
 
 ## Features
 
@@ -87,6 +87,19 @@ npm run dev
 Add org rules in the target repo as `docs/reviewgraph-config.json` (or `.reviewgraph.json` at the root). The ingest layer loads the **full JSON from the PR head branch** (GitHub truncates large config in diff patches). See [`docs/reviewgraph-config.example.json`](docs/reviewgraph-config.example.json).
 
 Point **any Neo4j** database (Aura, Desktop, Docker) with `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD`, then `npm run seed` to persist the ingested graph.
+
+For hosted Qwen3 explanations, set these server-only values in your private `.env`:
+
+```env
+SS_TOKEN=your-private-token
+QWEN_AGENT_MODE=primary
+QWEN_MODEL=Qwen3-Coder-30B-A3B-Instruct
+AURA_AGENT_MODE=off
+```
+
+The default endpoint is `https://continue.ovh.di-ai.soprasteria.com/v1/chat/completions`. Questions and graph evidence are sent there; database and VCS credentials are not. Never commit `SS_TOKEN` or put it in a `VITE_*` variable. Missing credentials or failed requests return the deterministic local graph answer. Set `QWEN_AGENT_MODE=off` to use only the local router (or the optional Aura agent).
+
+Run the mocked integration checks with `npm test`.
 
 ## Quick start
 

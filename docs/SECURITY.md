@@ -11,8 +11,11 @@ ReviewGraph keeps **all secrets on the server**. The React UI only talks to `htt
 | `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` | `.env` | Bolt driver in `server/neo4j.js` |
 | `AURA_CLIENT_ID`, `AURA_CLIENT_SECRET`, `AURA_AGENT_INVOKE_URL` | `.env` | OAuth + invoke in `server/auraAgent.js` |
 | `GITHUB_TOKEN`, `GITLAB_TOKEN` | `.env` | Ingest only (`domains/codereview/sources/`) |
+| `SS_TOKEN` | Private server `.env` | Bearer authentication in `server/qwenAgent.js` |
 
 Do not commit `.env`. Do not add `VITE_*` variables for these values — Vite would embed them in the client bundle.
+
+Qwen3 receives the question, repository label, local graph answer, graph rows, and risk assessment at the configured HTTPS endpoint. Database and VCS credentials are not included. Verify that sharing this repository evidence with the endpoint is permitted. Requests do not follow redirects, and upstream error bodies are not returned to the browser or logged.
 
 ---
 

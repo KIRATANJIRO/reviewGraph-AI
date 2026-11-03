@@ -8,6 +8,7 @@
     "dev:client": "vite --host 127.0.0.1",
     "dev:server": "node --watch-path=./server --watch-path=./domains server/index.js",
     "build": "vite build",
+    "test": "node --test server/qwenAgent.test.js",
     "preview": "vite preview --host 127.0.0.1",
     "seed": "node server/seed.js",
     "dataset": "node scripts/prepareDataset.js",

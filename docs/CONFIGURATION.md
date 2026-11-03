@@ -14,9 +14,10 @@ There is no separate “agent credentials UI” in the React app for Neo4j or VC
 | **Review a GitLab project** | `.env` | `GITLAB_PROJECT`, `GITLAB_TOKEN`, `GITLAB_API` (self-hosted), `GITLAB_MR`, `GITLAB_MAX_MRS` |
 | **Use built-in demo** | `.env` | Leave `GITHUB_*` and `GITLAB_*` unset, or `SOURCE=demo` |
 | **Any Neo4j database** | `.env` | `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, optional `NEO4J_DATABASE` |
+| **Hosted Qwen3 coding LLM** | Server `.env` | `SS_TOKEN`, optional `QWEN_MODEL`, `QWEN_API_URL`, `QWEN_AGENT_MODE`, `QWEN_TIMEOUT_MS` |
 | **Architecture rules for your repo** | **In the target repository** | `.reviewgraph.json` at repo root ([example](reviewgraph-config.example.json)) |
 | **CODEOWNERS / ownership** | **In the target repository** | `CODEOWNERS`, `.github/CODEOWNERS`, or `.gitlab/CODEOWNERS` |
-| **Hosted Neo4j Aura Agent** | **Aura Console** + code | [`domains/codereview/agent.json`](../domains/codereview/agent.json) + [aura-console-agent-setup.md](aura-console-agent-setup.md) |
+| **Hosted Neo4j Aura Agent** | Optional alternative | Leave `AURA_AGENT_MODE=off` when using Qwen3 |
 | **API port** | `.env` | `PORT` (default `4000`) |
 
 ---
@@ -88,6 +89,25 @@ npm run dev
 npm run seed    # write current graph into Neo4j
 ```
 
+### Hosted Qwen3 coding model
+
+Use **Neo4j + Qwen3** through the OpenAI-compatible chat-completions endpoint. No Ollama installation or additional npm dependency is needed.
+
+```env
+SS_TOKEN=your-private-token
+QWEN_AGENT_MODE=primary
+QWEN_API_URL=https://continue.ovh.di-ai.soprasteria.com/v1/chat/completions
+QWEN_MODEL=Qwen3-Coder-30B-A3B-Instruct
+QWEN_TIMEOUT_MS=300000
+AURA_AGENT_MODE=off
+```
+
+`POST /api/ask` routes the question to the canonical Cypher templates, runs those rows against Neo4j when configured, and sends the question, local answer, graph rows, and deterministic assessment to Qwen3. Only the server sends `Authorization: Bearer <SS_TOKEN>`. Check repository data-sharing requirements before using the hosted endpoint.
+
+If the token is missing or Qwen3 fails, the API returns the local graph-router answer with a sanitized `qwenError`. Set `QWEN_AGENT_MODE=off` to disable Qwen3; old `OLLAMA_*` settings are no longer used. Restart the server after editing `.env`.
+
+Health and metadata do not invoke paid chat requests. They report `not_checked` until the first request, then the most recent success or failure (not a continuous connectivity probe). The UI shows **Configured** before the first request and **Live** after success.
+
 ---
 
 ## 2. In the UI — what you enter
@@ -105,11 +125,11 @@ The header shows **data source** (`github`, `gitlab`, `demo`) and **repository n
 
 ---
 
-## 3. Aura Agent — where it is integrated
+## 3. Ask the Graph - hosted Qwen3 path
 
-ReviewGraph uses Aura Agent capabilities in **three places**:
+ReviewGraph uses Qwen3 as the default reasoning path, with deterministic local fallback.
 
-### A. Built-in local router (this repo, runs today)
+### A. Built-in graph router
 
 | Component | Role |
 | --- | --- |
@@ -124,19 +144,29 @@ Flow:
 UI "Ask the Graph" → POST /api/ask → questions.js → Neo4j (if configured) → JSON answer
 ```
 
-### B. Hosted Aura Agent **inside the React app** (Ask the Graph)
+### B. Qwen3 Agent **inside the React app**
 
-Add to `.env` (see `.env.example`):
+Set `SS_TOKEN` in the private server `.env`. The server calls `QWEN_API_URL` with `Qwen3-Coder-30B-A3B-Instruct` by default. The model explains the graph-grounded answer; it does **not** receive database credentials or generate arbitrary Cypher.
+
+### C. Optional hosted Aura Agent
+
+Aura is not needed for Qwen3. Keep it disabled unless you specifically want to test the hosted Neo4j Aura Agent path (set `QWEN_AGENT_MODE=off` in that case):
+
+```env
+AURA_AGENT_MODE=off
+```
+
+If you later enable the hosted path, add to `.env` (see `.env.example`):
 
 | Variable | Where to get it |
 | --- | --- |
 | `AURA_CLIENT_ID` / `AURA_CLIENT_SECRET` | Aura Console → Account → API Keys |
 | `AURA_AGENT_INVOKE_URL` | Agents → your agent → External access → invoke URL |
-| `AURA_AGENT_MODE` | `primary` (default when URL set), `local`, or `off` |
+| `AURA_AGENT_MODE` | `primary` for hosted Aura, `off` when using Qwen3 |
 
-[`server/auraAgent.js`](../server/auraAgent.js) obtains an OAuth token and calls the invoke URL. `POST /api/ask` uses Aura when `mode=primary`; on failure it falls back to section A.
+[`server/auraAgent.js`](../server/auraAgent.js) obtains an OAuth token and calls the invoke URL. `POST /api/ask` uses Aura when `QWEN_AGENT_MODE=off` and `AURA_AGENT_MODE=primary`; otherwise Qwen3 takes priority.
 
-### C. Hosted Neo4j Aura Agent (Aura Console UI)
+### D. Hosted Neo4j Aura Agent (Aura Console UI)
 
 Deploy the same tools to your **Aura tenant**:
 

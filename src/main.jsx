@@ -319,6 +319,15 @@ function Header({ meta, status }) {
               Aura {status.auraAgent?.ready ? "Live" : "Pending"}
             </div>
           )}
+          {status.qwenAgent?.enabled && (
+            <div
+              className={`db-status ${status.qwenAgent?.ready ? "connected aura-pill" : "fallback"}`}
+              title={status.qwenAgent?.reason === "not_configured" || status.qwenAgent?.reason === "authentication_failed" ? "Check SS_TOKEN in server .env" : status.qwenAgent?.model}
+            >
+              <Zap size={15} />
+              Qwen3 {status.qwenAgent?.ready ? "Live" : status.qwenAgent?.reason === "not_checked" ? "Configured" : "Pending"}
+            </div>
+          )}
           <div className={`db-status ${status.neo4j === "connected" ? "connected" : "fallback"}`}>
             {status.neo4j === "connected" ? <CheckCircle2 size={16} /> : <CircleDot size={16} />}
             Neo4j {status.neo4j === "connected" ? "Connected" : status.neo4j || "…"}
@@ -442,7 +451,9 @@ function AssessmentTab({ assessment, onCommit, committing, status }) {
 }
 
 function askSourceLabel(answer, meta) {
+  if (answer?.source === "qwen_agent") return "Qwen3 Agent";
   if (answer?.source === "aura_agent") return "Aura Agent";
+  if (answer?.qwenError) return "Local fallback";
   if (meta?.auraAgent?.enabled && meta?.auraAgent?.mode === "primary") return "Local fallback";
   return "Local router";
 }

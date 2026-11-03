@@ -18,7 +18,13 @@ import {
   formatAssessmentBrief
 } from "./auraAgent.js";
 import {
+  isQwenAgentEnabled,
+  invokeQwenAgent,
+  getQwenAgentStatus
+} from "./qwenAgent.js";
+import {
   publicAuraAgentStatus,
+  publicQwenAgentStatus,
   publicMeta,
   sanitizeAskResponse,
   sanitizeClientError
@@ -105,15 +111,18 @@ function mergeAuraWithLocalAssessment(auraAnswer, assessment) {
 
 app.get("/api/meta", asyncRoute(async (_req, res) => {
   const auraInternal = await getAuraAgentStatus();
+  const qwenInternal = await getQwenAgentStatus();
   res.json({
     ...publicMeta(pack.meta),
     domain: ACTIVE_DOMAIN,
-    auraAgent: publicAuraAgentStatus(auraInternal)
+    auraAgent: publicAuraAgentStatus(auraInternal),
+    qwenAgent: publicQwenAgentStatus(qwenInternal)
   });
 }));
 
 app.get("/api/health", asyncRoute(async (_req, res) => {
   const auraInternal = await getAuraAgentStatus();
+  const qwenInternal = await getQwenAgentStatus();
   let neo4j = "fallback";
   if (getDriver()) {
     try {
@@ -127,6 +136,7 @@ app.get("/api/health", asyncRoute(async (_req, res) => {
     ok: true,
     neo4j,
     auraAgent: publicAuraAgentStatus(auraInternal),
+    qwenAgent: publicQwenAgentStatus(qwenInternal),
     domain: ACTIVE_DOMAIN
   });
 }));
@@ -187,10 +197,31 @@ async function enrichWithLocalCypher(answer, entityId, body) {
 
 app.post("/api/ask", asyncRoute(async (req, res) => {
   const { question = pack.meta.sampleQuestions?.[0] || "", entityId = pack.meta.flagshipEntityId } = req.body;
+  const localAssessment = pack.assess(entityId);
+  const local = pack.ask(question, entityId);
+  const enriched = await enrichWithLocalCypher({ ...local, source: "local" }, entityId, req.body);
+
+  if (isQwenAgentEnabled()) {
+    try {
+      const qwenAnswer = await invokeQwenAgent({
+        question,
+        entityId,
+        localAnswer: enriched,
+        assessment: localAssessment,
+        rows: enriched.rows,
+        agentContext: auraContext(entityId)
+      });
+      sendAsk(res, { ...qwenAnswer, source: "qwen_agent", neo4j: enriched.neo4j, rows: enriched.rows, generatedAt: new Date().toISOString() });
+      return;
+    } catch (error) {
+      console.error(`[ReviewGraph] Qwen3 Agent failed (${error.message}); falling back to local router.`);
+      sendAsk(res, { ...enriched, qwenError: error.message, generatedAt: new Date().toISOString() });
+      return;
+    }
+  }
 
   if (isAuraAgentEnabled()) {
     try {
-      const localAssessment = pack.assess(entityId);
       const auraAnswer = await invokeAuraAgent(question, entityId, auraContext(entityId));
       const enriched = await enrichWithLocalCypher(auraAnswer, entityId, req.body);
       const merged = mergeAuraWithLocalAssessment(enriched, localAssessment);
@@ -209,8 +240,6 @@ app.post("/api/ask", asyncRoute(async (req, res) => {
     }
   }
 
-  const answer = pack.ask(question, entityId);
-  const enriched = await enrichWithLocalCypher({ ...answer, source: "local" }, entityId, req.body);
   sendAsk(res, { ...enriched, generatedAt: new Date().toISOString() });
 }));
 
@@ -254,6 +283,8 @@ app.listen(port, host, async () => {
   const src = pack.meta?.dataSource || "demo";
   const repo = pack.meta?.repository?.name;
   const aura = await getAuraAgentStatus();
+  const qwen = await getQwenAgentStatus();
   const auraNote = aura.configured ? `, aura=${aura.mode}${aura.ready ? "" : " (auth pending)"}` : "";
-  console.log(`ReviewGraph AI [domain=${ACTIVE_DOMAIN}, source=${src}${repo ? `, repo=${repo}` : ""}${auraNote}] http://${host}:${port}`);
+  const qwenNote = qwen.mode === "primary" ? `, qwen=${qwen.model}${qwen.configured ? " (configured)" : " (SS_TOKEN missing)"}` : "";
+  console.log(`ReviewGraph AI [domain=${ACTIVE_DOMAIN}, source=${src}${repo ? `, repo=${repo}` : ""}${auraNote}${qwenNote}] http://${host}:${port}`);
 });
